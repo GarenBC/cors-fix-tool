@@ -1,50 +1,47 @@
-function applyCorsFix(yamlString) {
-  let patched = yamlString;
-  let changes = [];
+window.onload = () => {
+  const originSelect = document.getElementById("originSelect");
+  originSelect.value = localStorage.getItem("corsOrigin") || "*";
+  originSelect.onchange = () =>
+    localStorage.setItem("corsOrigin", originSelect.value);
+};
 
-  const corsMethodResponses = `MethodResponses:
+function getCorsMethodResponses() {
+  return `MethodResponses:
     - StatusCode: 200
       ResponseParameters:
         method.response.header.Access-Control-Allow-Origin: true
         method.response.header.Access-Control-Allow-Headers: true
         method.response.header.Access-Control-Allow-Methods: true`;
+}
 
-  const corsIntegrationResponses = `IntegrationResponses:
+function getCorsIntegrationResponses(origin) {
+  return `IntegrationResponses:
     - StatusCode: 200
       ResponseParameters:
-        method.response.header.Access-Control-Allow-Origin: "'*'"
+        method.response.header.Access-Control-Allow-Origin: "'${origin}'"
         method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
         method.response.header.Access-Control-Allow-Methods: "'GET'"
       ResponseTemplates:
         application/json: ""`;
+}
 
-  const methodRegex = /^(\s*)(\w+):\s*\n(\1\s{2}Type: AWS::ApiGateway::Method[\s\S]+?)(\1\s{2}Properties:\s*\n)((?:\1\s{4}.+\n)*)(?!\1\s{4}MethodResponses)/gm;
+function highlightBlock(block) {
+  return `<span class="highlight-added">${block}</span>`;
+}
 
-  patched = patched.replace(methodRegex, (match, indent, methodName, blockStart, propStart, propsBlock) => {
-    const ind4 = indent + '   ';
+function runCorsFix() {
+  const input = document.getElementById("yamlInput").value;
+  const origin = document.getElementById("originSelect").value;
 
-    const highlightedMethodResponses = `<span class="highlight-added">\n${ind4}${corsMethodResponses.replace(/\n/g, `\n${ind4}`)}\n</span>`;
-    const highlightedIntegrationResponses = `<span class="highlight-added">\n${ind4}${corsIntegrationResponses.replace(/\n/g, `\n${ind4}`)}\n</span>`;
+  let patched = input;
 
-    let newPropsBlock = propsBlock;
-    let didPatch = false;
+  if (!input.includes("MethodResponses")) {
+    patched += `\n${highlightBlock(getCorsMethodResponses())}`;
+  }
 
-    if (!propsBlock.includes('IntegrationResponses')) {
-      newPropsBlock += `\n${highlightedIntegrationResponses}\n`;
-      didPatch = true;
-    }
+  if (!input.includes("IntegrationResponses")) {
+    patched += `\n${highlightBlock(getCorsIntegrationResponses(origin))}`;
+  }
 
-    if (!propsBlock.includes('MethodResponses')) {
-      newPropsBlock += `\n${highlightedMethodResponses}\n`;
-      didPatch = true;
-    }
-
-    if (didPatch) {
-      changes.push(methodName);
-    }
-
-    return `${indent}${methodName}:\n${blockStart}${propStart}${newPropsBlock}`;
-  });
-
-  return patched;
+  document.getElementById("yamlOutput").innerHTML = patched;
 }
