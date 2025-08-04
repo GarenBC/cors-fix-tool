@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CORS Fix Helper</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: auto;
+      padding: 2rem;
+    }
+    textarea {
+      width: 100%;
+      height: 300px;
+      font-family: monospace;
+      font-size: 14px;
+    }
+    button {
+      margin-top: 1rem;
+      padding: 0.5rem 1rem;
+      font-size: 16px;
+    }
+    pre {
+      background: #f0f0f0;
+      padding: 1rem;
+      margin-top: 2rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+  <h1>CORS Fix Helper</h1>
+  <p>Paste your AWS Lambda YAML template below and click "Fix CORS" to update the API Gateway settings to include CORS headers.</p>
+  <textarea id="yamlInput" placeholder="Paste YAML here..."></textarea>
+  <button onclick="fixCORS()">Fix CORS</button>
+  <pre id="output"></pre>
+
+  <script>
+    function fixCORS() {
+      const input = document.getElementById('yamlInput').value;
+      let output = input;
+
+      // Add Access-Control-Allow-Origin to method response headers
+      output = output.replace(/(MethodResponses:\n(?:[\s\S]*?)- StatusCode: 200)/g, 
+        `$1\n          ResponseParameters:\n            method.response.header.Access-Control-Allow-Origin: true`);
+
+      // Add Integration.ResponseParameters to Integration
+      output = output.replace(/(Integration:\n[\s\S]*?IntegrationResponses:\n[\s\S]*?- StatusCode: 200)/g, 
+        `$1\n          ResponseParameters:\n            method.response.header.Access-Control-Allow-Origin: '\'*'`);
+
+      document.getElementById('output').textContent = output;
+    }
+  </script>
+</body>
+</html>
