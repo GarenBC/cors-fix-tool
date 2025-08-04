@@ -3,51 +3,47 @@ function applyCorsFix(yamlString) {
   let changes = [];
 
   const corsMethodResponses = `MethodResponses:
-  - StatusCode: 200
-    ResponseParameters:
-      method.response.header.Access-Control-Allow-Origin: true
-      method.response.header.Access-Control-Allow-Headers: true
-      method.response.header.Access-Control-Allow-Methods: true`;
+    - StatusCode: 200
+      ResponseParameters:
+        method.response.header.Access-Control-Allow-Origin: true
+        method.response.header.Access-Control-Allow-Headers: true
+        method.response.header.Access-Control-Allow-Methods: true`;
 
   const corsIntegrationResponses = `IntegrationResponses:
-  - StatusCode: 200
-    ResponseParameters:
-      method.response.header.Access-Control-Allow-Origin: "'*'"
-      method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-      method.response.header.Access-Control-Allow-Methods: "'GET'"
-    ResponseTemplates:
-      application/json: ""`;
+    - StatusCode: 200
+      ResponseParameters:
+        method.response.header.Access-Control-Allow-Origin: "'*'"
+        method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        method.response.header.Access-Control-Allow-Methods: "'GET'"
+      ResponseTemplates:
+        application/json: ""`;
 
-  // Match all AWS::ApiGateway::Method blocks
-  const methodRegex = /^(\s*)(\w+):\s*\n(?:\1  .*\n)*\1  Type: AWS::ApiGateway::Method/gm;
-  const methodMatches = [...yamlString.matchAll(methodRegex)];
+  const methodRegex = /^(\s*)(\w+):\s*\n(\1\s{2}Type: AWS::ApiGateway::Method[\s\S]+?)(\1\s{2}Properties:\s*\n)((?:\1\s{4}.+\n)*)(?!\1\s{4}MethodResponses)/gm;
 
-  methodMatches.forEach((match) => {
-    const indent = match[1];
-    const methodName = match[2];
+  patched = patched.replace(methodRegex, (match, indent, methodName, blockStart, propStart, propsBlock) => {
+    const ind4 = indent + '   ';
 
-    const blockRegex = new RegExp(`(${indent}${methodName}:\\s*\\n(?:${indent}  .*\\n)*)`, 'gm');
-    patched = patched.replace(blockRegex, (blockMatch) => {
-      let modifiedBlock = blockMatch;
-      let didPatch = false;
+    const highlightedMethodResponses = `<span class="highlight-added">\n${ind4}${corsMethodResponses.replace(/\n/g, `\n${ind4}`)}\n</span>`;
+    const highlightedIntegrationResponses = `<span class="highlight-added">\n${ind4}${corsIntegrationResponses.replace(/\n/g, `\n${ind4}`)}\n</span>`;
 
-      if (!blockMatch.includes('IntegrationResponses')) {
-        modifiedBlock += `\n${indent}  ${corsIntegrationResponses.replace(/\n/g, `\n${indent}  `)}`;
-        didPatch = true;
-      }
+    let newPropsBlock = propsBlock;
+    let didPatch = false;
 
-      if (!blockMatch.includes('MethodResponses')) {
-        modifiedBlock += `\n${indent}  ${corsMethodResponses.replace(/\n/g, `\n${indent}  `)}`;
-        didPatch = true;
-      }
+    if (!propsBlock.includes('IntegrationResponses')) {
+      newPropsBlock += `\n${highlightedIntegrationResponses}\n`;
+      didPatch = true;
+    }
 
-      if (didPatch) {
-        changes.push(methodName);
-        return `<span class="highlight-added">\n${modifiedBlock.trim()}\n</span>\n`;
-      }
+    if (!propsBlock.includes('MethodResponses')) {
+      newPropsBlock += `\n${highlightedMethodResponses}\n`;
+      didPatch = true;
+    }
 
-      return blockMatch;
-    });
+    if (didPatch) {
+      changes.push(methodName);
+    }
+
+    return `${indent}${methodName}:\n${blockStart}${propStart}${newPropsBlock}`;
   });
 
   return patched;
