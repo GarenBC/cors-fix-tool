@@ -1,100 +1,115 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <link rel="icon" type="image/png" href="favicon.png">
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CORS Fix Helper</title>
+  <title>CORS Fix Helper (YAML Patch)</title>
+  <link rel="icon" type="image/png" href="favicon.png" />
   <style>
-    body { font-family: sans-serif; padding: 1rem; background: #f5f5f5; }
-    h1 { color: #333; }
+    body {
+      font-family: sans-serif;
+      padding: 2rem;
+      background: #f5f5f5;
+      max-width: 800px;
+      margin: auto;
+    }
+    h1 {
+      color: #2c3e50;
+    }
     textarea, pre {
-      width: 100%; height: 300px;
-      font-family: monospace; padding: 1rem;
-      border: 1px solid #ccc; border-radius: 5px;
-      background: white; margin-bottom: 1rem;
+      width: 100%;
+      font-family: monospace;
+      background: #fff;
+      padding: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      margin-top: 0.5rem;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
     }
     button {
-      padding: 0.5rem 1rem; font-size: 1rem;
-      background: #4caf50; color: white;
-      border: none; border-radius: 4px; cursor: pointer;
-      margin-right: 0.5rem;
+      margin-top: 1rem;
+      padding: 0.5rem 1.5rem;
+      font-size: 1rem;
+      background-color: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
     }
-    button:hover { background: #45a049; }
-    input[type="file"] { margin-bottom: 1rem; }
-    label, select { font-size: 1rem; margin-right: 0.5rem; }
+    .highlight-added {
+      background-color: #e0ffe0;
+      border-left: 3px solid #4caf50;
+      padding-left: 6px;
+      display: block;
+    }
+    label, select {
+      display: block;
+      margin-top: 1rem;
+      font-weight: bold;
+    }
+    input[type="file"] {
+      margin-top: 0.5rem;
+    }
   </style>
 </head>
 <body>
 
   <h1>CORS Fix Helper (YAML Patch)</h1>
-  <p>Paste your CloudFormation YAML below, upload a file, or choose an origin.</p>
 
-  <input type="file" accept=".yaml,.yml" onchange="loadFile(event)" />
+  <p>Paste your CloudFormation YAML below, upload a file, or choose a CORS origin:</p>
 
-  <div>
-    <label for="originSelect">Choose CORS origin:</label>
-    <select id="originSelect">
-      <option value="*">*</option>
-      <option value="https://example.com">https://example.com</option>
-      <option value="https://mydomain.org">https://mydomain.org</option>
-    </select>
-  </div>
+  <label for="yamlInput">YAML Template:</label>
+  <textarea id="yamlInput" rows="16" placeholder="Paste your CloudFormation YAML here..."></textarea>
 
-  <textarea id="yamlInput" placeholder="Paste your CloudFormation YAML here..."></textarea>
-  <button onclick="fixCORS()">Fix CORS</button>
-  <button onclick="refreshFields()">Refresh</button>
+  <label for="fileUpload">Upload YAML file:</label>
+  <input type="file" id="fileUpload" accept=".yaml,.yml" />
+
+  <label for="originSelect">Choose CORS origin:</label>
+  <select id="originSelect">
+    <option value="*">*</option>
+    <option value="https://yourdomain.com">https://yourdomain.com</option>
+    <option value="https://example.org">https://example.org</option>
+  </select>
+
+  <button onclick="runCorsFix()">Fix CORS and Refresh</button>
 
   <h2>✅ Output:</h2>
-  <pre id="output"></pre>
+  <pre id="yamlOutput"><em>Patched template will appear here...</em></pre>
 
   <script>
-    function patchMethodResponses(yaml) {
-      return yaml.replace(
-        /(MethodResponses:\n(?:[\s\S]*?)-\s*StatusCode:\s*200)/g,
-        `$1\n          ResponseParameters:\n            method.response.header.Access-Control-Allow-Origin: true`
-      );
-    }
+    // Example patcher (use your real logic here)
+    function runCorsFix() {
+      const input = document.getElementById("yamlInput").value;
+      const origin = document.getElementById("originSelect").value;
 
-    function patchIntegrationResponses(yaml, origin = "'*'") {
-      return yaml.replace(
-        /(Integration:\n[\s\S]*?IntegrationResponses:\n[\s\S]*?- StatusCode: 200)/g,
-        `$1\n            ResponseParameters:\n              method.response.header.Access-Control-Allow-Origin: ${JSON.stringify(origin)}`
-      );
-    }
+      let patched = input;
 
-    function validateYAML(yaml) {
-      const hasMethod = yaml.includes('MethodResponses:');
-      const hasIntegration = yaml.includes('IntegrationResponses:');
-      if (!hasMethod || !hasIntegration) {
-        alert("⚠️ Warning: YAML may be missing 'MethodResponses' or 'IntegrationResponses'");
-      }
-    }
+      // Basic insertion for demo purposes
+      const corsMethod = `
+MethodResponses:
+  - StatusCode: 200
+    ResponseParameters:
+      method.response.header.Access-Control-Allow-Origin: true
+      method.response.header.Access-Control-Allow-Headers: true
+      method.response.header.Access-Control-Allow-Methods: true`;
 
-    function fixCORS() {
-      const input = document.getElementById('yamlInput').value;
-      const origin = document.getElementById('originSelect').value || '*';
-      let output = input;
+      const corsIntegration = `
+IntegrationResponses:
+  - StatusCode: 200
+    ResponseParameters:
+      method.response.header.Access-Control-Allow-Origin: "'${origin}'"
+      method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      method.response.header.Access-Control-Allow-Methods: "'GET'"
+    ResponseTemplates:
+      application/json: ""`;
 
-      validateYAML(input);
-      output = patchMethodResponses(output);
-      output = patchIntegrationResponses(output, origin);
+      // Append if not already there
+      if (!input.includes("MethodResponses")) patched += `\n<span class="highlight-added">${corsMethod}</span>`;
+      if (!input.includes("IntegrationResponses")) patched += `\n<span class="highlight-added">${corsIntegration}</span>`;
 
-      document.getElementById('output').textContent = output;
-    }
-
-    function refreshFields() {
-      document.getElementById('yamlInput').value = '';
-      document.getElementById('output').textContent = '';
-      document.getElementById('originSelect').value = '*';
-    }
-
-    function loadFile(event) {
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        document.getElementById('yamlInput').value = e.target.result;
-      };
-      reader.readAsText(event.target.files[0]);
+      // Show in output
+      document.getElementById("yamlOutput").innerHTML = patched;
     }
   </script>
 

@@ -1,50 +1,52 @@
-// PATCH ENGINE
-function patchMethodResponses(yaml) {
-  return yaml.replace(
-    /(MethodResponses:\n(?:[\s\S]*?)-\s*StatusCode:\s*200)/g,
-    `$1\n          ResponseParameters:\n            method.response.header.Access-Control-Allow-Origin: true`
-  );
-}
+function applyCorsFix(yamlString) {
+  // Very basic stub detection and patching (works for one GET method block)
+  let patched = yamlString;
+  let changes = [];
 
-function patchIntegrationResponses(yaml, origin = "'*'") {
-  return yaml.replace(
-    /(Integration:\n[\s\S]*?IntegrationResponses:\n[\s\S]*?- StatusCode: 200)/g,
-    `$1\n            ResponseParameters:\n              method.response.header.Access-Control-Allow-Origin: ${JSON.stringify(origin)}`
-  );
-}
+  const corsMethodResponses = `
+    MethodResponses:
+      - StatusCode: 200
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Origin: true
+          method.response.header.Access-Control-Allow-Headers: true
+          method.response.header.Access-Control-Allow-Methods: true`;
 
-// YAML VALIDATOR
-function validateYAML(yaml) {
-  const hasMethod = yaml.includes('MethodResponses:');
-  const hasIntegration = yaml.includes('IntegrationResponses:');
-  if (!hasMethod || !hasIntegration) {
-    alert("Warning: YAML may be missing required blocks like 'MethodResponses' or 'IntegrationResponses'");
-  }
-}
+  const corsIntegrationResponses = `
+    IntegrationResponses:
+      - StatusCode: 200
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Origin: "'*'"
+          method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+          method.response.header.Access-Control-Allow-Methods: "'GET'"
+        ResponseTemplates:
+          application/json: ""`;
 
-// UI CONTROLLER
-function fixCORS() {
-  const input = document.getElementById('yamlInput').value;
-  const origin = document.getElementById('originSelect').value || '*';
-  let output = input;
-
-  validateYAML(input);
-  output = patchMethodResponses(output);
-  output = patchIntegrationResponses(output, origin);
-
-  document.getElementById('output').textContent = output;
-}
-
-function refreshFields() {
-  document.getElementById('yamlInput').value = '';
-  document.getElementById('output').textContent = '';
-  document.getElementById('originSelect').value = '*';
-}
-
-function loadFile(event) {
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    document.getElementById('yamlInput').value = e.target.result;
+  const insertCorsBlocks = (sectionName, corsBlock) => {
+    const regex = new RegExp(`(${sectionName}:\\s*\\n(?:[ ]{2,}[^\n]*\\n)+)`, 'gm');
+    patched = patched.replace(regex, (match) => {
+      if (!match.includes('Access-Control-Allow-Origin')) {
+        changes.push(sectionName);
+        return match + '\n' + corsBlock + '\n';
+      }
+      return match;
+    });
   };
-  reader.readAsText(event.target.files[0]);
+
+  // Insert blocks into method if missing
+  insertCorsBlocks('GetMethod', corsIntegrationResponses);
+  insertCorsBlocks('GetMethod', corsMethodResponses);
+
+  // Highlight inserted lines (optional: if used in HTML output)
+  changes.forEach((block) => {
+    patched = patched.replace(
+      corsMethodResponses.trim(),
+      `<span class="highlight-added">${corsMethodResponses.trim()}</span>`
+    );
+    patched = patched.replace(
+      corsIntegrationResponses.trim(),
+      `<span class="highlight-added">${corsIntegrationResponses.trim()}</span>`
+    );
+  });
+
+  return patched;
 }
