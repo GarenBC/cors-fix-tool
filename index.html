@@ -68,16 +68,34 @@ Access-Control-Max-Age: 86400
 
   <script>
     function fixCORS() {
-      const input = document.getElementById('yamlInput').value;
+      let input = document.getElementById('yamlInput').value;
       let output = input;
 
-      // Add Access-Control-Allow-Origin to MethodResponses
-      output = output.replace(/(MethodResponses:\n(?:[\s\S]*?)- StatusCode: 200)/g,
-        `$1\n          ResponseParameters:\n            method.response.header.Access-Control-Allow-Origin: true`);
+      // Add CORS to MethodResponses if missing
+      const methodResponseRegex = /MethodResponses:\s*\n(?:\s*- StatusCode: 200)/;
+      if (!methodResponseRegex.test(output)) {
+        output = output.replace(/(HttpMethod: GET[\s\S]*?Integration:)/, match => {
+          return match + `\n  MethodResponses:\n    - StatusCode: 200\n      ResponseParameters:\n        method.response.header.Access-Control-Allow-Origin: true`;
+        });
+      }
 
-      // Add Access-Control-Allow-Origin to IntegrationResponses
-      output = output.replace(/(Integration:\n[\s\S]*?IntegrationResponses:\n[\s\S]*?- StatusCode: 200)/g,
-        `$1\n            ResponseParameters:\n              method.response.header.Access-Control-Allow-Origin: "'*'"`);
+      // Add CORS to IntegrationResponses if missing
+      const integrationResponseRegex = /IntegrationResponses:\s*\n(?:\s*- StatusCode: 200)/;
+      if (!integrationResponseRegex.test(output)) {
+        output = output.replace(/(Integration:\s*\n[\s\S]*?Type: AWS_PROXY)/, match => {
+          return match + `\n  IntegrationResponses:\n    - StatusCode: 200\n      ResponseParameters:\n        method.response.header.Access-Control-Allow-Origin: "'*'"`;
+        });
+      }
+
+      // Add CORS header to Lambda response if missing
+      if (!output.includes(`headers: { "Access-Control-Allow-Origin": "*" }`)) {
+        output = output.replace(/(return\s*{\s*statusCode:\s*\d+,)/, `$1 headers: { "Access-Control-Allow-Origin": "*" },`);
+      }
+
+      // Fallback message if GET method not found
+      if (!output.includes('HttpMethod: GET')) {
+        output += `\n\n# ⚠️ Could not find GET method block to apply CORS patch`;
+      }
 
       document.getElementById('output').textContent = output;
     }
