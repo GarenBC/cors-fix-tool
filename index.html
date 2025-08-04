@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>CORS Fix Helper</title>
   <style>
     body {
@@ -10,6 +10,7 @@
       max-width: 800px;
       margin: auto;
       padding: 2rem;
+      line-height: 1.5;
     }
     textarea {
       width: 100%;
@@ -21,6 +22,7 @@
       margin-top: 1rem;
       padding: 0.5rem 1rem;
       font-size: 16px;
+      cursor: pointer;
     }
     pre {
       background: #f0f0f0;
@@ -29,29 +31,71 @@
       white-space: pre-wrap;
       word-break: break-word;
     }
+    h2 {
+      margin-top: 3rem;
+    }
   </style>
 </head>
 <body>
   <h1>CORS Fix Helper</h1>
-  <p>Paste your AWS Lambda YAML template below and click "Fix CORS" to update the API Gateway settings to include CORS headers.</p>
+  <p>Paste your AWS Lambda YAML template below and click <strong>"Fix CORS"</strong> to update the API Gateway settings.</p>
+
   <textarea id="yamlInput" placeholder="Paste YAML here..."></textarea>
   <button onclick="fixCORS()">Fix CORS</button>
   <pre id="output"></pre>
+
+  <h2>🧪 Simulate Preflight Request</h2>
+  <button onclick="sendPreflight()">Simulate Preflight</button>
+  <pre id="preflightOutput"></pre>
+
+  <h2>🔍 CORS Header Reference</h2>
+  <pre>
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Methods: GET, POST, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Authorization
+Access-Control-Max-Age: 86400
+  </pre>
+
+  <h2>💡 What This Tool Adds</h2>
+  <ul>
+    <li><strong>Access-Control-Allow-Origin</strong>: Permits cross-origin calls.</li>
+    <li><strong>Access-Control-Allow-Headers</strong>: Lists headers clients can send.</li>
+    <li><strong>Access-Control-Allow-Methods</strong>: Specifies allowed HTTP methods.</li>
+    <li><strong>Access-Control-Max-Age</strong>: Caches preflight responses.</li>
+  </ul>
 
   <script>
     function fixCORS() {
       const input = document.getElementById('yamlInput').value;
       let output = input;
 
-      // Add Access-Control-Allow-Origin to method response headers
-      output = output.replace(/(MethodResponses:\n(?:[\s\S]*?)- StatusCode: 200)/g, 
+      // Add Access-Control-Allow-Origin to MethodResponses
+      output = output.replace(/(MethodResponses:\n(?:[\s\S]*?)- StatusCode: 200)/g,
         `$1\n          ResponseParameters:\n            method.response.header.Access-Control-Allow-Origin: true`);
 
-      // Add Integration.ResponseParameters to Integration
-      output = output.replace(/(Integration:\n[\s\S]*?IntegrationResponses:\n[\s\S]*?- StatusCode: 200)/g, 
-        `$1\n          ResponseParameters:\n            method.response.header.Access-Control-Allow-Origin: '\'*'`);
+      // Add Access-Control-Allow-Origin to IntegrationResponses
+      output = output.replace(/(Integration:\n[\s\S]*?IntegrationResponses:\n[\s\S]*?- StatusCode: 200)/g,
+        `$1\n            ResponseParameters:\n              method.response.header.Access-Control-Allow-Origin: "'*'"`);
 
       document.getElementById('output').textContent = output;
+    }
+
+    function sendPreflight() {
+      fetch("https://httpbin.org/anything", {
+        method: "OPTIONS",
+        headers: {
+          Origin: "https://your-domain.com",
+          "Access-Control-Request-Method": "GET",
+          "Access-Control-Request-Headers": "Content-Type"
+        },
+        mode: "cors"
+      }).then(res => {
+        document.getElementById("preflightOutput").textContent =
+          `Status: ${res.status}\nHeaders:\n` +
+          [...res.headers].map(h => h.join(": ")).join("\n");
+      }).catch(err => {
+        document.getElementById("preflightOutput").textContent = `Error: ${err}`;
+      });
     }
   </script>
 </body>
