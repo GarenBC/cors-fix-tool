@@ -11,6 +11,7 @@
       margin: auto;
       padding: 2rem;
       line-height: 1.5;
+      background-color: #f9f9f9;
     }
     textarea {
       width: 100%;
@@ -25,11 +26,12 @@
       cursor: pointer;
     }
     pre {
-      background: #f0f0f0;
+      background: #efefef;
       padding: 1rem;
       margin-top: 2rem;
       white-space: pre-wrap;
       word-break: break-word;
+      border-radius: 5px;
     }
     h2 {
       margin-top: 3rem;
@@ -46,7 +48,7 @@
 
   <h2>🧪 Simulate Preflight Request</h2>
   <button onclick="sendPreflight()">Simulate Preflight</button>
-  <pre id="preflightOutput"></pre>
+  <pre id="preflightOutput">Status: ...</pre>
 
   <h2>🔍 CORS Header Reference</h2>
   <pre>
@@ -81,7 +83,7 @@ Access-Control-Max-Age: 86400
     }
 
     function sendPreflight() {
-      fetch("https://httpbin.org/anything", {
+      fetch("https://mocki.io/v1/435cc49e-96df-4216-87fa-6a5e5e5e1dee", {
         method: "OPTIONS",
         headers: {
           Origin: "https://your-domain.com",
@@ -90,9 +92,12 @@ Access-Control-Max-Age: 86400
         },
         mode: "cors"
       }).then(res => {
+        const headersList = [];
+        for (let [key, value] of res.headers.entries()) {
+          headersList.push(`${key}: ${value}`);
+        }
         document.getElementById("preflightOutput").textContent =
-          `Status: ${res.status}\nHeaders:\n` +
-          [...res.headers].map(h => h.join(": ")).join("\n");
+          `Status: ${res.status}\nHeaders:\n` + headersList.join("\n");
       }).catch(err => {
         document.getElementById("preflightOutput").textContent = `Error: ${err}`;
       });
