@@ -2,124 +2,100 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CORS Fix Helper</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 800px;
-      margin: auto;
-      padding: 2rem;
-      line-height: 1.5;
-      background-color: #f9f9f9;
-    }
-    textarea {
-      width: 100%;
-      height: 300px;
-      font-family: monospace;
-      font-size: 14px;
+    body { font-family: sans-serif; padding: 1rem; background: #f5f5f5; }
+    h1 { color: #333; }
+    textarea, pre {
+      width: 100%; height: 300px;
+      font-family: monospace; padding: 1rem;
+      border: 1px solid #ccc; border-radius: 5px;
+      background: white; margin-bottom: 1rem;
     }
     button {
-      margin-top: 1rem;
-      padding: 0.5rem 1rem;
-      font-size: 16px;
-      cursor: pointer;
+      padding: 0.5rem 1rem; font-size: 1rem;
+      background: #4caf50; color: white;
+      border: none; border-radius: 4px; cursor: pointer;
+      margin-right: 0.5rem;
     }
-    pre {
-      background: #efefef;
-      padding: 1rem;
-      margin-top: 2rem;
-      white-space: pre-wrap;
-      word-break: break-word;
-      border-radius: 5px;
-    }
-    h2 {
-      margin-top: 3rem;
-    }
+    button:hover { background: #45a049; }
+    input[type="file"] { margin-bottom: 1rem; }
+    label, select { font-size: 1rem; margin-right: 0.5rem; }
   </style>
 </head>
 <body>
-  <h1>CORS Fix Helper</h1>
-  <p>Paste your AWS Lambda YAML template below and click <strong>"Fix CORS"</strong> to update the API Gateway settings.</p>
 
-  <textarea id="yamlInput" placeholder="Paste YAML here..."></textarea>
+  <h1>CORS Fix Helper (YAML Patch)</h1>
+  <p>Paste your CloudFormation YAML below, upload a file, or choose an origin.</p>
+
+  <input type="file" accept=".yaml,.yml" onchange="loadFile(event)" />
+
+  <div>
+    <label for="originSelect">Choose CORS origin:</label>
+    <select id="originSelect">
+      <option value="*">*</option>
+      <option value="https://example.com">https://example.com</option>
+      <option value="https://mydomain.org">https://mydomain.org</option>
+    </select>
+  </div>
+
+  <textarea id="yamlInput" placeholder="Paste your CloudFormation YAML here..."></textarea>
   <button onclick="fixCORS()">Fix CORS</button>
+  <button onclick="refreshFields()">Refresh</button>
+
+  <h2>✅ Output:</h2>
   <pre id="output"></pre>
 
-  <h2>🧪 Simulate Preflight Request</h2>
-  <button onclick="sendPreflight()">Simulate Preflight</button>
-  <pre id="preflightOutput">Status: ...</pre>
-
-  <h2>🔍 CORS Header Reference</h2>
-  <pre>
-Access-Control-Allow-Origin: *
-Access-Control-Allow-Methods: GET, POST, OPTIONS
-Access-Control-Allow-Headers: Content-Type, Authorization
-Access-Control-Max-Age: 86400
-  </pre>
-
-  <h2>💡 What This Tool Adds</h2>
-  <ul>
-    <li><strong>Access-Control-Allow-Origin</strong>: Permits cross-origin calls.</li>
-    <li><strong>Access-Control-Allow-Headers</strong>: Lists headers clients can send.</li>
-    <li><strong>Access-Control-Allow-Methods</strong>: Specifies allowed HTTP methods.</li>
-    <li><strong>Access-Control-Max-Age</strong>: Caches preflight responses.</li>
-  </ul>
-
   <script>
+    function patchMethodResponses(yaml) {
+      return yaml.replace(
+        /(MethodResponses:\n(?:[\s\S]*?)-\s*StatusCode:\s*200)/g,
+        `$1\n          ResponseParameters:\n            method.response.header.Access-Control-Allow-Origin: true`
+      );
+    }
+
+    function patchIntegrationResponses(yaml, origin = "'*'") {
+      return yaml.replace(
+        /(Integration:\n[\s\S]*?IntegrationResponses:\n[\s\S]*?- StatusCode: 200)/g,
+        `$1\n            ResponseParameters:\n              method.response.header.Access-Control-Allow-Origin: ${JSON.stringify(origin)}`
+      );
+    }
+
+    function validateYAML(yaml) {
+      const hasMethod = yaml.includes('MethodResponses:');
+      const hasIntegration = yaml.includes('IntegrationResponses:');
+      if (!hasMethod || !hasIntegration) {
+        alert("⚠️ Warning: YAML may be missing 'MethodResponses' or 'IntegrationResponses'");
+      }
+    }
+
     function fixCORS() {
-      let input = document.getElementById('yamlInput').value;
+      const input = document.getElementById('yamlInput').value;
+      const origin = document.getElementById('originSelect').value || '*';
       let output = input;
 
-      // Add CORS to MethodResponses if missing
-      const methodResponseRegex = /MethodResponses:\s*\n(?:\s*- StatusCode: 200)/;
-      if (!methodResponseRegex.test(output)) {
-        output = output.replace(/(HttpMethod: GET[\s\S]*?Integration:)/, match => {
-          return match + `\n  MethodResponses:\n    - StatusCode: 200\n      ResponseParameters:\n        method.response.header.Access-Control-Allow-Origin: true`;
-        });
-      }
-
-      // Add CORS to IntegrationResponses if missing
-      const integrationResponseRegex = /IntegrationResponses:\s*\n(?:\s*- StatusCode: 200)/;
-      if (!integrationResponseRegex.test(output)) {
-        output = output.replace(/(Integration:\s*\n[\s\S]*?Type: AWS_PROXY)/, match => {
-          return match + `\n  IntegrationResponses:\n    - StatusCode: 200\n      ResponseParameters:\n        method.response.header.Access-Control-Allow-Origin: "'*'"`;
-        });
-      }
-
-      // Add CORS header to Lambda response if missing
-      if (!output.includes(`headers: { "Access-Control-Allow-Origin": "*" }`)) {
-        output = output.replace(/(return\s*{\s*statusCode:\s*\d+,)/, `$1 headers: { "Access-Control-Allow-Origin": "*" },`);
-      }
-
-      // Fallback message if GET method not found
-      if (!output.includes('HttpMethod: GET')) {
-        output += `\n\n# ⚠️ Could not find GET method block to apply CORS patch`;
-      }
+      validateYAML(input);
+      output = patchMethodResponses(output);
+      output = patchIntegrationResponses(output, origin);
 
       document.getElementById('output').textContent = output;
     }
 
-    function sendPreflight() {
-      fetch("https://mocki.io/v1/435cc49e-96df-4216-87fa-6a5e5e5e1dee", {
-        method: "OPTIONS",
-        headers: {
-          Origin: "https://your-domain.com",
-          "Access-Control-Request-Method": "GET",
-          "Access-Control-Request-Headers": "Content-Type"
-        },
-        mode: "cors"
-      }).then(res => {
-        const headersList = [];
-        for (let [key, value] of res.headers.entries()) {
-          headersList.push(`${key}: ${value}`);
-        }
-        document.getElementById("preflightOutput").textContent =
-          `Status: ${res.status}\nHeaders:\n` + headersList.join("\n");
-      }).catch(err => {
-        document.getElementById("preflightOutput").textContent = `Error: ${err}`;
-      });
+    function refreshFields() {
+      document.getElementById('yamlInput').value = '';
+      document.getElementById('output').textContent = '';
+      document.getElementById('originSelect').value = '*';
+    }
+
+    function loadFile(event) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('yamlInput').value = e.target.result;
+      };
+      reader.readAsText(event.target.files[0]);
     }
   </script>
+
 </body>
 </html>
